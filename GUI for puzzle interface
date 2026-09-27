@@ -1,0 +1,179 @@
+# ============================================================
+    # GUI TEAM
+    # ============================================================
+    """
+    Top-level Tkinter application. Should hold ONE Puzzle instance at a
+    time and talk to it only through the public methods above.
+    """
+    """
+    - __init__: build the window, menus/buttons, two canvases (original / transformed)
+    """
+    class PuzzleApp:
+       def __init__(self):
+        self.puzzle: Puzzle | None = None
+        self.selected_tile_index: int | None = None
+        self.root = tk.Tk()
+        self.root.title = "Puzzle App"
+        self.root.geometry("800x600")
+        self.root.resizable(False, False)
+
+        # TODO: build Tkinter widgets
+        # Build buttons and two canvasses
+        self.original_canvas = tk.Canvas(self.root, width=self.image.shape[1], height=self.image.shape[0])
+        self.transformed_canvas = tk.Canvas(self.root, width=self.image.shape[1], height=self.image.shape[0])
+        self.load_button = tk.Button(self.root, text="Load Image", command=self.load_image)
+        self.shuffle_button = tk.Button(self.root, text="Shuffle", command=self.shuffle_image)
+       
+        # Packs
+        self.original_canvas.pack()
+        self.transformed_canvas.pack()
+        self.load_button.pack(pady=10)
+        self.shuffle_button.pack(pady=10)
+
+        # Build Menu
+        self.Menu = tk.Menu(self.root)
+        self.root.config(menu=self.Menu)
+        self.file_menu = tk.Menu(self.Menu)
+        self.Menu.add_cascade(label="File", menu=self.file_menu)
+        self.file_menu.add_command(label="Label", command=self.load_image)
+        self.file_menu.add_command(label="Shuffle", command=self.shuffle_image)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Exit", command=self.root.quit)
+        pass
+
+        """-on_load_image_click(): open file dialog -> ImageProcessor.load_image()
+        -> ImageProcessor.prepare_for_grid() -> create Puzzle(...) -> puzzle.scramble(...)
+        -> render both canvases"""
+        def on_load_image_click(self):
+          file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg;*.jpeg;*.png;*.bmp")])
+          if file_path:
+            self.image = ImageProcessor.load_image(file_path)
+            self.prepared_image = ImageProcessor.prepare_for_grid(self.image)
+            self.puzzle = Puzzle(self.prepared_image, self.grid_size)
+            self.puzzle.scramble(self.num_transformations)
+            self.render_canvases()
+            pass
+
+            def render_canvases(self):
+              self.original_canvas.delete("all")
+              self.transformed_canvas.delete("all")
+              self.original_canvas.create_image(0, 0, anchor=tk.NW, image=self.original_photo)
+              self.transformed_canvas.create_image(0, 0, anchor=tk.NW, image=self.transformed_photo)
+              pass
+
+            
+            """ on_grid_size_change(value): store chosen grid size (3/4/5) before next load"""
+            def on_grid_size_change(self, value):
+              self.grid_size = int(value)
+              pass
+
+            """render(): draw puzzle.get_display_grid() on the right canvas, original
+               image on the left canvas, faint grid lines over the transformed image,
+              green ticks on correct tiles"""
+            def draw_grid_lines(self):
+              for i in range(self.grid_size):
+                x = i * self.cell_width
+                y = i * self.cell
+                self.transformed_canvas.create_line(x, 0, x, self.image.shape[0], fill="gray", width=1)
+                self.transformed_canvas
+                pass
+
+            def render(self):
+              self.transformed_image = self.puzzle.get_display_grid()
+              self.transformed_photo = ImageTk.PhotoImage(Image.fromarray(self.transformed_image))
+              self.original_photo = ImageTk.PhotoImage(Image.fromarray(self.image))
+              self.render_canvases()
+              self.draw_grid_lines()
+              self.draw_ticks()
+              self.root.update()
+              plt.draw()
+              plt.show()
+              pass
+
+            def draw_ticks(self):
+              for tile in self.puzzle.tiles:
+                x = tile.col * self.cell_width + self.cell_width // 2
+                y = tile.row * self.cell_height + self.cell_height // 2
+                self.transformed_canvas.create_line(x - 5, y, x + 5, y, fill="green", width=2)
+                self.transformed_canvas.create_line(x, y - 5, x, y + 5, fill="green", width=2)
+                pass
+
+            """-on_canvas_click(event): map (event.x, event.y) -> tile index, handle
+            left-click select/swap, right-click rotate, shift+left-click flip,
+            then call render() and update the move/incorrect counters
+            """
+            def on_canvas_click(self, event):
+              tile_index = self.get_tile_index(event.x, event.y)
+              if tile_index is not None:
+                if event.num == 1:
+                  if self.selected_tile_index is None:
+                    self.selected_tile_index = tile_index
+                  else:
+                    self.swap_tiles(self.selected_tile_index, tile_index)
+                    self.selected_tile_index = None
+                elif event.num == 3:
+                  self.rotate_tile(tile_index)
+                elif event.state == 16 and event.num == 1:
+                  self.flip_tile(tile_index)
+                self.render()
+                self.update_counters()
+                pass
+
+            def get_tile_index(self, x, y):
+              for i, tile in enumerate(self.puzzle.tiles):
+                 if tile.col * self.cell_width <= x < (tile.col + 1) * self.cell_width and tile.row * self.cell_height <= y <
+                  (tile.row + 1) * self.cell_height:
+                  return i
+              return None
+              pass
+            
+            def swap_tiles(self, index_a, index_b):
+              self.puzzle.swap_tiles(index_a, index_b)
+              pass
+
+            def rotate_tile(self, index):
+              self.puzzle.rotate_tile(index)
+              pass
+            
+            def flip_tile(self, index):
+              self.puzzle.flip_tile(index)
+              pass
+            
+            def update_counters(self):
+              self.moves_label.config(text=f"Moves: {self.puzzle.moves}")
+              self.incorrect_label.config(text=f"Incorrect: {self.puzzle.count_incorrect()}")
+              pass
+            
+            """on_hint_click(): call puzzle.get_hint(), draw blue circles on both
+            canvases, disable the button if hints_used == max_hints"""
+            def on_hint_click(self):
+              hint = self.puzzle.get_hint()
+              if hint is not None:
+                self.draw_hint(hint)
+                if self.puzzle.hints_used == self.puzzle.max_hints:
+                  self.hint_button.config(state=tk.DISABLED)
+              pass
+
+            def draw_hint(self, hint):
+              self.transformed_canvas.create_oval(hint["current_index"] * self.cell_width, hint["current_index"] * self.cell_height,
+                                                (hint["current_index"] + 1) * self.cell_width, (hint["current_index"] + 1) * self.cell_height,
+                                                fill="blue")
+              self.original_canvas.create_oval(hint["correct_col"] * self.cell_width, hint["correct_row"] * self.cell_height,
+                                                (hint["correct_col"] + 1) * self.cell_width, (hint["correct_row"] + 1) * self.cell_height,
+                                                fill="blue")
+              pass
+
+            """- on_solve_click(): call puzzle.solve(), render(), reset counters display"""
+            def on_solve_click(self):
+              self.puzzle.solve()
+              self.render()
+              self.moves_label.config(text=f"Moves: {self.puzzle.moves}")
+              self.incorrect_label.config(text=f"Incorrect: {self.puzzle.count_incorrect()}")
+              pass
+            
+            """- check_win(): after every action, call puzzle.is_solved(); if True,
+            show a "Solved!" message and stop accepting canvas clicks"""
+            def check_win(self):
+              if self.puzzle.is_solved():
+                messagebox.showinfo("Solved!")
+                self.root.quit()
